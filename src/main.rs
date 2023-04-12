@@ -1,5 +1,5 @@
 extern crate redis;
-use actix_web::{web, App, HttpResponse, HttpServer, get};
+use actix_web::{web, App, HttpResponse, HttpServer, get, middleware::Logger};
 use awc::Client;
 use redis::{Commands, RedisError};
 
@@ -25,7 +25,10 @@ fn fetch_an_integer() -> redis::RedisResult<isize> {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    HttpServer::new(|| App::new().route("/", web::get().to(HttpResponse::Ok)))
+    HttpServer::new(|| 
+        App::new()
+        .wrap(Logger::default())
+        .route("/", web::get().to(HttpResponse::Ok)))
         .bind(("127.0.0.1", 8080))?
         .run()
         .await
