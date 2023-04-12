@@ -1,7 +1,6 @@
-extern crate redis;
+// extern crate redis;
 use actix_web::{web, App, HttpResponse, HttpServer, get, middleware::Logger};
-use awc::Client;
-use redis::{Commands, RedisError};
+use redis::{Commands};
 
 #[get("/query/{station_name}")]
 async fn query(path: web::Path<(u32,)>) -> HttpResponse{
