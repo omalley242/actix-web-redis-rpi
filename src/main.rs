@@ -23,6 +23,12 @@ struct JsonFormat {
 }
 
 #[derive(Deserialize)]
+struct IdKeyData {
+    id: String,
+    json: String,
+}
+
+#[derive(Deserialize)]
 struct SubJsonFormat {
     catergory: String,
     key: String, 
@@ -41,10 +47,10 @@ async fn api_request() -> Result<Bytes, Box<dyn std::error::Error>>{
     Ok(res.body().limit(2500000).await?)
 }   
 
-async fn deserialize(data: Bytes) -> Result<String, Box<dyn std::error::Error>> {
+async fn deserialize(data: Bytes) -> Result<IdKeyData, Box<dyn std::error::Error>> {
     info!("deserializing json data");
-    let json_data= String::from(str::from_utf8(&data)?);
-    Ok(json_data)
+    let JsonData:IdKeyData= serde_json::from_slice(&data)?;
+    Ok(JsonData)
 }
 
 async fn do_i_update(server: &mut Connection) -> Result<bool, Box<dyn std::error::Error>> {
@@ -58,10 +64,10 @@ async fn do_i_update(server: &mut Connection) -> Result<bool, Box<dyn std::error
     Ok(false)
 }
 
-async fn update_redis(server: &mut Connection, data: String) -> Result<bool, Box<dyn std::error::Error>> {
+async fn update_redis(server: &mut Connection, data: IdKeyData) -> Result<bool, Box<dyn std::error::Error>> {
     info!("updating redis json data");
     let _: () = redis::cmd("SET").arg("api_timestamp").arg(std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH)?.as_secs()).query(server)?;
-    let _: () = redis::cmd("JSON.SET").arg("json").arg("$").arg(data).query(server)?;
+    let _: () = redis::cmd("JSON.SET").arg(data.id).arg("$").arg(data.json).query(server)?;
     Ok(true)
 }
 
@@ -82,7 +88,7 @@ async fn redis_query(req: HttpRequest) -> Result<HttpResponse, Box<dyn std::erro
     let client = redis::Client::open("redis://127.0.0.1/")?;
     let mut server = client.get_connection()?;
     let query_id = req.match_info().get("id").unwrap().to_string();
-    let res: String = redis::cmd("JSON.GET").arg("json").arg("$").arg(query_id).query(&mut server)?;
+    let res: String = redis::cmd("JSON.GET").arg("json").arg("$".to_owned() + &query_id).query(&mut server)?;
     Ok(HttpResponse::Ok().body(res))
 }
 
