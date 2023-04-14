@@ -85,6 +85,7 @@ async fn poll_update() -> Result<HttpResponse, Box<dyn std::error::Error>> {
 
 #[get("/query/{id}")]
 async fn redis_query(req: HttpRequest) -> Result<HttpResponse, Box<dyn std::error::Error>> {
+    poll_update().await?;
     let client = redis::Client::open("redis://127.0.0.1/")?;
     let mut server = client.get_connection()?;
     let query_id = req.match_info().get("id").unwrap().to_string();
