@@ -88,7 +88,7 @@ async fn redis_query(req: HttpRequest) -> Result<HttpResponse, Box<dyn std::erro
     let client = redis::Client::open("redis://127.0.0.1/")?;
     let mut server = client.get_connection()?;
     let query_id = req.match_info().get("id").unwrap().to_string();
-    let res: String = redis::cmd("JSON.GET").arg("json").arg("$".to_owned() + &query_id).query(&mut server)?;
+    let res: String = redis::cmd("JSON.GET").arg(query_id).arg("$").query(&mut server)?;
     Ok(HttpResponse::Ok().body(res))
 }
 
