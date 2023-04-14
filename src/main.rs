@@ -61,7 +61,7 @@ async fn do_i_update(server: &mut Connection) -> Result<bool, Box<dyn std::error
 async fn update_redis(server: &mut Connection, data: String) -> Result<bool, Box<dyn std::error::Error>> {
     info!("updating redis json data");
     let _: () = redis::cmd("SET").arg("api_timestamp").arg(std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH)?.as_secs()).query(server)?;
-    let _: () = redis::cmd("JSON.SET").arg("json").arg(data).query(server)?;
+    let _: () = redis::cmd("JSON.SET").arg("json").arg("$").arg(data).query(server)?;
     Ok(true)
 }
 
