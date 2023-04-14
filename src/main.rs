@@ -1,9 +1,7 @@
-use std::string;
-
-use actix_web::{App, HttpServer, middleware::Logger, web::Bytes};
+use actix_web::{App, HttpServer, middleware::Logger, web::Bytes, get, HttpResponse};
 use awc;
 use actix_files as fs;
-use redis::{Connection, RedisError, RedisResult};
+use redis::{Connection, RedisError};
 use serde::{Deserialize};
 use log::{info};
 
@@ -24,33 +22,36 @@ struct json_format {
     lon: f64,
 }
 
-const api_ping_time_secs: u64 = 10;
+const API_PING_TIME_SECS: u64 = 10;
 
 async fn api_request() -> Result<Bytes, Box<dyn std::error::Error>>{
-    //make http request and handle response with api
+    info!{"requesting tfl api data"};
     let client = awc::Client::default();
     let req = client.get("https://api.tfl.gov.uk/BikePoint/");
     let mut res = req.send().await?;
     Ok(res.body().limit(2500000).await?)
 }   
 
-async fn deserialize(data: Bytes) -> Result<json_format, Box<dyn std::error::Error>> {
-    let json_data: json_format = serde_json::from_slice(&data)?;
+async fn deserialize(data: Bytes) -> Result<Vec::<json_format>, Box<dyn std::error::Error>> {
+    info!{"deserializing json data"};
+    let json_data: Vec::<json_format> = serde_json::from_slice(&data)?;
     Ok(json_data)
 }
 
 async fn do_i_update(server: &mut Connection) -> Result<bool, Box<dyn std::error::Error>> {
+    info!{"checking time from redis"};
     let res: u64 = redis::cmd("GET").arg("api_timestamp").query(server)?;
-    if res - std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH)?.as_secs() > api_ping_time_secs {
+    if res - std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH)?.as_secs() > API_PING_TIME_SECS {
         return Ok(true);
     }
     Ok(false)
 }
 
 async fn update_redis(server: &mut Connection, data: Vec::<json_format>) -> Result<bool, Box<dyn std::error::Error>> {
+    info!{"updating redis json data"};
     let _: () = redis::cmd("SET").arg("api_timestamp").arg(std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH)?.as_secs()).query(server)?;
-    let checksums: Vec<Result<redis::Value, RedisError>> = data.iter().map(|x| 
-         redis::pipe()
+    let _: Vec<Result<redis::Value, RedisError>> = data.iter().map(|x| 
+        redis::pipe()
         .cmd("SET").arg(&x.id).arg(&x.url)
         .cmd("SET").arg(&x.id).arg(&x.commonName)
         .cmd("SET").arg(&x.id).arg(&x.placeType)
@@ -59,24 +60,30 @@ async fn update_redis(server: &mut Connection, data: Vec::<json_format>) -> Resu
         .cmd("SET").arg(&x.id).arg(&x.lon)
         .query(server)
     ).collect();
-    
+
     Ok(true)
 }
 
+#[get("/test")]
+async fn test() -> Result<HttpResponse, Box<dyn std::error::Error>>{
+    let client = redis::Client::open("redis://127.0.0.1/")?;
+    let mut server = client.get_connection()?;
+    let update = do_i_update(&mut server).await?;
+    if update {
+        let data = api_request().await?;
+        let json_data = deserialize(data).await?;
+        update_redis(&mut server, json_data).await?;
+    }
+    Ok(HttpResponse::Ok().finish())
+}
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     //start the logger
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
 
-
     //Create a server for each thread
     HttpServer::new(|| 
-        //Check if data is too old
-
-        //if too old run api request and update redis
-
-        //create the httpserver details with the app builder
         App::new()
         .wrap(Logger::default())
         .service(fs::Files::new("/", "./static/home_page")
@@ -84,6 +91,7 @@ async fn main() -> std::io::Result<()> {
             .index_file("home_page.html")
             .use_last_modified(true),
         )
+        .service(test)
     )
     //bind it to the open port on 8080 (http not ssl)
     .bind(("0.0.0.0", 8080))?
