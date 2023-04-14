@@ -42,6 +42,7 @@ async fn do_i_update(server: &mut Connection) -> Result<bool, Box<dyn std::error
     info!("checking time from redis");
     info!("current time in secs: {}", std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH)?.as_secs());
     let res: u64 = redis::cmd("GET").arg("api_timestamp").query(server)?;
+    info!("{}", res);
     if res - std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH)?.as_secs() > API_PING_TIME_SECS {
         return Ok(true);
     }
