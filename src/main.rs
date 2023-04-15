@@ -4,7 +4,7 @@ use actix_files as fs;
 use redis::{Connection};
 use serde::{Deserialize, Serialize};
 use log::{info};
-use std::str;
+use std::{str, thread, borrow::BorrowMut};
 //Load Data into Redis Database
 
 //query for redis database by location 
@@ -69,26 +69,22 @@ async fn update_redis(server: &mut Connection) -> Result<bool, Box<dyn std::erro
     Ok(true)
 }
 
-async fn poll_update() -> Result<bool, Box<dyn std::error::Error>> {
-    let client = redis::Client::open("redis://127.0.0.1/")?;
-    let mut server = client.get_connection()?;
-    let update = do_i_update(&mut server).await?;
+async fn poll_update(){
+    let client = redis::Client::open("redis://127.0.0.1/").unwrap();
+    let mut server = client.get_connection();
+    let update = do_i_update(server.as_mut().unwrap()).await.unwrap();
     if update {
-        update_redis(&mut server).await?;
-        return Ok(true);
+        update_redis(&mut server.unwrap()).await.unwrap();
     }
-    Ok(false)
 }
 
 #[get("/query/{id}")]
 async fn redis_query(req: HttpRequest) -> Result<HttpResponse, Box<dyn std::error::Error>> {
-    let updated = poll_update();
     info!("querying the data");
     let client = redis::Client::open("redis://127.0.0.1/")?;
     let mut server = client.get_connection()?;
     let query_id = req.match_info().get("id").unwrap().to_string();
     let res: String = redis::cmd("JSON.GET").arg(query_id).arg("$").query(&mut server)?;
-    info!("Updated Redis Database: {}", updated.await?);
     Ok(HttpResponse::Ok().body(res))
 }
 
@@ -96,7 +92,7 @@ async fn redis_query(req: HttpRequest) -> Result<HttpResponse, Box<dyn std::erro
 async fn main() -> std::io::Result<()> {
     //start the logger
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
-
+    tokio::task::spawn_blocking(|| async move { poll_update() } );
     //Create a server for each thread
     HttpServer::new(|| 
         App::new()
