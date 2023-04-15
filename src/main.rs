@@ -24,7 +24,7 @@ struct JsonFormat {
 
 #[derive(Serialize, Deserialize)]
 struct SubJsonFormat {
-    catergory: String,
+    category: String,
     key: String, 
     sourceSystemKey: String,
     value: String,
