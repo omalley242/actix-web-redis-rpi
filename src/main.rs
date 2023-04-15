@@ -31,7 +31,7 @@ struct SubJsonFormat {
     modified: String,
 }
 
-const API_PING_TIME_SECS: u64 = 10;
+const API_PING_TIME_SECS: u64 = 60;
 
 async fn api_request() -> Result<Bytes, Box<dyn std::error::Error>>{
     info!("requesting tfl api data");
@@ -60,8 +60,7 @@ async fn do_i_update(server: &mut Connection) -> Result<bool, Box<dyn std::error
 
 async fn update_redis(server: &mut Connection, data: Vec::<JsonFormat>) -> Result<bool, Box<dyn std::error::Error>> {
     info!("updating redis json data");
-    let _: () = redis::cmd("SET").arg("api_timestamp").arg(std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH)?.as_secs()).query(server)?;
-
+    redis::cmd("SET").arg("api_timestamp").arg(std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH)?.as_secs()).query(server)?;
     for x in data {
         redis::cmd("JSON.SET").arg(&x.id).arg("$").arg(serde_json::to_string(&x)?).query(server)?;
     }
