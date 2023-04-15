@@ -69,24 +69,26 @@ async fn update_redis(server: &mut Connection) -> Result<bool, Box<dyn std::erro
     Ok(true)
 }
 
-async fn poll_update() -> Result<HttpResponse, Box<dyn std::error::Error>> {
+async fn poll_update() -> Result<bool, Box<dyn std::error::Error>> {
     let client = redis::Client::open("redis://127.0.0.1/")?;
     let mut server = client.get_connection()?;
     let update = do_i_update(&mut server).await?;
     if update {
         update_redis(&mut server).await?;
+        return Ok(true);
     }
-    Ok(HttpResponse::Ok().finish())
+    Ok(false)
 }
 
 #[get("/query/{id}")]
 async fn redis_query(req: HttpRequest) -> Result<HttpResponse, Box<dyn std::error::Error>> {
-    let _ = poll_update();
+    let updated = poll_update();
     info!("querying the data");
     let client = redis::Client::open("redis://127.0.0.1/")?;
     let mut server = client.get_connection()?;
     let query_id = req.match_info().get("id").unwrap().to_string();
     let res: String = redis::cmd("JSON.GET").arg(query_id).arg("$").query(&mut server)?;
+    info!("Updated Redis Database: {}", updated.await?);
     Ok(HttpResponse::Ok().body(res))
 }
 
@@ -99,7 +101,6 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(|| 
         App::new()
         .wrap(Logger::default())
-        .route("/test", web::get().to(poll_update))
         .service(redis_query)
         .service(fs::Files::new("/", "./static/home_page")
             .show_files_listing()
