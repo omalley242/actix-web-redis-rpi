@@ -81,6 +81,7 @@ async fn poll_update(){
 #[get("/query/{id}")]
 async fn redis_query(req: HttpRequest) -> Result<HttpResponse, Box<dyn std::error::Error>> {
     info!("querying the data");
+    tokio::task::spawn_blocking(|| async move { poll_update() } );
     let client = redis::Client::open("redis://127.0.0.1/")?;
     let mut server = client.get_connection()?;
     let query_id = req.match_info().get("id").unwrap().to_string();
@@ -92,7 +93,6 @@ async fn redis_query(req: HttpRequest) -> Result<HttpResponse, Box<dyn std::erro
 async fn main() -> std::io::Result<()> {
     //start the logger
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
-    tokio::task::spawn_blocking(|| async move { poll_update() } );
     //Create a server for each thread
     HttpServer::new(|| 
         App::new()
