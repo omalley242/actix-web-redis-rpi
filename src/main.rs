@@ -1,10 +1,9 @@
-use actix_web::{App, HttpServer, HttpRequest, middleware::Logger, web::{Bytes, Json}, get, HttpResponse, web};
+use actix_web::{App, HttpServer, HttpRequest, middleware::Logger, web::{Bytes}, get, HttpResponse, web};
 use awc;
 use actix_files as fs;
 use redis::{Connection};
 use serde::{Deserialize, Serialize};
 use log::{info};
-use serde_json::Value;
 use std::str;
 //Load Data into Redis Database
 
@@ -42,9 +41,9 @@ async fn api_request() -> Result<Bytes, Box<dyn std::error::Error>>{
     Ok(res.body().limit(2500000).await?)
 }   
 
-async fn deserialize(data: Bytes) -> Result<JsonFormat, Box<dyn std::error::Error>> {
+async fn deserialize(data: Bytes) -> Result<Vec::<JsonFormat>, Box<dyn std::error::Error>> {
     info!("deserializing json data");
-    let JsonData: JsonFormat = serde_json::from_slice(&data)?;
+    let JsonData: Vec::<JsonFormat> = serde_json::from_slice(&data)?;
     Ok(JsonData)
 }
 
@@ -59,11 +58,13 @@ async fn do_i_update(server: &mut Connection) -> Result<bool, Box<dyn std::error
     Ok(false)
 }
 
-async fn update_redis(server: &mut Connection, data: JsonFormat) -> Result<bool, Box<dyn std::error::Error>> {
+async fn update_redis(server: &mut Connection, data: Vec::<JsonFormat>) -> Result<bool, Box<dyn std::error::Error>> {
     info!("updating redis json data");
     let _: () = redis::cmd("SET").arg("api_timestamp").arg(std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH)?.as_secs()).query(server)?;
 
-    let _: () = redis::cmd("JSON.SET").arg(&data.id).arg("$").arg(serde_json::to_string(&data)?).query(server)?;
+    for x in data {
+        redis::cmd("JSON.SET").arg(&x.id).arg("$").arg(serde_json::to_string(&x)?).query(server)?;
+    }
     Ok(true)
 }
 
