@@ -58,10 +58,12 @@ async fn do_i_update(server: &mut Connection) -> Result<bool, Box<dyn std::error
     Ok(false)
 }
 
-async fn update_redis(server: &mut Connection, data: Vec::<JsonFormat>) -> Result<bool, Box<dyn std::error::Error>> {
+async fn update_redis(server: &mut Connection) -> Result<bool, Box<dyn std::error::Error>> {
     info!("updating redis json data");
+    let data = api_request().await?;
+    let json_data = deserialize(data).await?;
     redis::cmd("SET").arg("api_timestamp").arg(std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH)?.as_secs()).query(server)?;
-    for x in data {
+    for x in json_data {
         redis::cmd("JSON.SET").arg(&x.id).arg("$").arg(serde_json::to_string(&x)?).query(server)?;
     }
     Ok(true)
@@ -72,17 +74,14 @@ async fn poll_update() -> Result<HttpResponse, Box<dyn std::error::Error>> {
     let mut server = client.get_connection()?;
     let update = do_i_update(&mut server).await?;
     if update {
-        info!("updating redis data");
-        let data = api_request().await?;
-        let json_data = deserialize(data).await?;
-        update_redis(&mut server, json_data).await?;
+        update_redis(&mut server).await?;
     }
     Ok(HttpResponse::Ok().finish())
 }
 
 #[get("/query/{id}")]
 async fn redis_query(req: HttpRequest) -> Result<HttpResponse, Box<dyn std::error::Error>> {
-    poll_update().await?;
+    let _ = poll_update();
     info!("querying the data");
     let client = redis::Client::open("redis://127.0.0.1/")?;
     let mut server = client.get_connection()?;
