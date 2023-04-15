@@ -69,11 +69,11 @@ async fn update_redis(server: &mut Connection, data: Vec::<JsonFormat>) -> Resul
 }
 
 async fn poll_update() -> Result<HttpResponse, Box<dyn std::error::Error>> {
-    info!("updating redis data");
     let client = redis::Client::open("redis://127.0.0.1/")?;
     let mut server = client.get_connection()?;
     let update = do_i_update(&mut server).await?;
     if update {
+        info!("updating redis data");
         let data = api_request().await?;
         let json_data = deserialize(data).await?;
         update_redis(&mut server, json_data).await?;
